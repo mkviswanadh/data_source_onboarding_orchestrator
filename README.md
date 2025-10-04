@@ -11,8 +11,8 @@ It supports Discovery, Exploration, Ingestion orchestration via GitHub + Airflow
 1. Create a Python virtual environment and install dependencies:
 
    ```bash
-   python3 -m venv venv
-   source venv/bin/activate
+   python3 -m venv data_onboard_venv
+   data_onboard_venv/Scripts/activate
    pip install -r requirements.txt
 
 2. Configure your credentials:

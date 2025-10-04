@@ -1,9 +1,22 @@
 from sqlalchemy import create_engine, inspect
+import os
+import urllib.parse
+
+
+def get_msql_connection():
+    # Config
+    user = os.getenv("DB_USER", "ingestion_user")
+    raw_password = os.getenv("DB_PASSWORD", "Test123")
+    encoded_password = urllib.parse.quote_plus(raw_password)
+    host = os.getenv("DB_HOST", "localhost")
+    db = os.getenv("DB_NAME", "ai_tdv_finacle")
+    db_uri = f"mysql+pymysql://{user}:{encoded_password}@{host}/{db}"
+    return db_uri
+
 
 # Example DB configurations
 DB_CONFIGS = {
-    "mysql_finance": "mysql+pymysql://user:password@mysql-host/finance",
-    "postgres_sales": "postgresql+psycopg2://user:password@postgres-host/sales"
+    "mysql_source": get_msql_connection()
 }
 
 def _discover_tables(filter_func=None):
@@ -28,9 +41,19 @@ def _discover_tables(filter_func=None):
             print(f"Error inspecting {source_name}: {e}")
     return results
 
-def discover_sources():
-    """Discover tables with 'transaction' in the name (case-insensitive)"""
-    return _discover_tables(lambda t: "transaction" in t.lower())
+def discover_sources(filter_func=None):
+    """
+    Discover available sources in the database, return a list of source names.
+    """
+    results = []
+    available_sources = _discover_tables(lambda t: "transactions" in t.lower())
+    for source in available_sources:
+        source_name = source["source_name"]
+        for table in source["table"]:
+            if filter_func is None or filter_func(table):
+                results.append(source_name)  # Add only the source name
+
+    return results
 
 def check_table_in_sources(table_name: str):
     """Check if a table with the exact name exists in any source"""

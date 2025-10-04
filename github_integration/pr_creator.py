@@ -4,7 +4,7 @@ def create_ingestion_pr(repo_full_name: str, pr_branch: str, yaml_content: str, 
     """
     Example: repo_full_name = "my-org/data-onboarding-repo"
     """
-    token = "YOUR_GITHUB_TOKEN"
+    token = ""
     gh = Github(token)
     repo = gh.get_repo(repo_full_name)
 

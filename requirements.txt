@@ -8,4 +8,6 @@ sqlalchemy
 psycopg2-binary
 PyGithub
 ydata-profiling
-
+pymysql
+langchain==0.1.13
+langchain-community==0.0.32
