@@ -1,0 +1,13 @@
+ingestion:
+  source:
+    name: transactions
+    schema: source_schema
+    table: source_table
+  target:
+    schema: analytics1
+    table: curated_table1
+  domain: transactions
+  description: ''
+  refresh_schedule: one-time
+  load_strategy: incremental
+  created_at: '2025-10-04T19:14:59.039342'
