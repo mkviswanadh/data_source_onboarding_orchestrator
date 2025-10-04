@@ -1,0 +1,11 @@
+streamlit
+openai
+jinja2
+PyYAML
+requests
+pandas
+sqlalchemy
+psycopg2-binary
+PyGithub
+ydata-profiling
+

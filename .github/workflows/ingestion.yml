@@ -1,0 +1,28 @@
+name: Ingestion Workflow
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  ingest_on_merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Generate and deploy DAG
+        run: |
+          python airflow_dag.py ingestion_configs/${{ github.event.pull_request.head.ref }}.yaml \
+            dag_outputs/${{ github.event.pull_request.head.ref }}.py /usr/local/airflow/dags
+
+      - name: Trigger DAG via Airflow API
+        run: |
+          dag_id="ingest__${{ github.event.pull_request.head.ref }}"
+          curl -X POST http://YOUR_AIRFLOW_HOST/api/v1/dags/$dag_id/dagRuns \
+            -H "Content-Type: application/json" \
+            -d "{\"conf\": {}}"
+
+      - name: Log audit
+        run: |
+          python log_to_audit.py target_schema target_table success "Ingestion triggered after PR merge"

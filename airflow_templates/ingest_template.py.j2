@@ -1,0 +1,41 @@
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+from airflow.operators.bash import BashOperator
+from datetime import datetime
+import pandas as pd
+import sqlalchemy
+
+def extract_and_load():
+    source_engine = sqlalchemy.create_engine("{{ source_conn }}")
+    target_engine = sqlalchemy.create_engine("{{ target_conn }}")
+
+    query = "SELECT * FROM {{ source_schema }}.{{ source_table }}"
+    df = pd.read_sql(query, con=source_engine)
+
+    df.to_sql("{{ target_table }}", con=target_engine, schema="{{ target_schema }}", if_exists='replace', index=False)
+
+default_args = {
+    "owner": "data_onboarding",
+    "start_date": datetime(2025, 10, 4),
+    "depends_on_past": False,
+    "retries": 1,
+}
+
+with DAG(
+    dag_id="{{ dag_id }}",
+    default_args=default_args,
+    schedule_interval="{{ schedule }}",
+    catchup=False,
+) as dag:
+
+    run_ingest = PythonOperator(
+        task_id="run_ingest",
+        python_callable=extract_and_load
+    )
+
+    log_audit = BashOperator(
+        task_id="log_audit",
+        bash_command="python3 /opt/airflow/dags/log_to_audit.py {{ target_schema }} {{ target_table }} success 'Ingestion completed via DAG {{ dag_id }}'"
+    )
+
+    run_ingest >> log_audit
