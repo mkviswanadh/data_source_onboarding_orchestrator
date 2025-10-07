@@ -41,19 +41,25 @@ def _discover_tables(filter_func=None):
             print(f"Error inspecting {source_name}: {e}")
     return results
 
+def discover_sources_full(filter_func=None):
+    """
+    Action: Full discovery with schema and table info.
+    Returns list of dicts with: schema, table, source_name
+    """
+    return _discover_tables(filter_func)
+
 def discover_sources(filter_func=None):
     """
     Discover available sources in the database, return a list of source names.
     """
-    results = []
+    results = set()
     available_sources = _discover_tables(lambda t: "transactions" in t.lower())
     for source in available_sources:
         source_name = source["source_name"]
-        for table in source["table"]:
-            if filter_func is None or filter_func(table):
-                results.append(source_name)  # Add only the source name
+        if filter_func is None or filter_func(source["table"]):  
+            results.add(source_name)  
 
-    return results
+    return list(results)  
 
 def check_table_in_sources(table_name: str):
     """Check if a table with the exact name exists in any source"""

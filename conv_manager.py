@@ -1,5 +1,5 @@
 from llama_client import LlamaClient
-from data_ops.discovery import discover_sources, check_table_in_sources
+from data_ops.discovery import discover_sources, discover_sources_full, check_table_in_sources
 from data_ops.profiling import profile_table
 from data_ops.ingestion import build_ingestion_yaml
 from github_integration.pr_creator import create_ingestion_pr
@@ -24,6 +24,10 @@ class ConversationManager:
             sources = discover_sources()
             self.state['sources'] = sources  # Store sources in state
             return sources
+        elif action == "discover_sources_full":
+            full_sources = discover_sources_full()
+            self.state['full_sources'] = full_sources  # Store full sources in state
+            return full_sources
         elif action == "check_table":
             return check_table_in_sources(kwargs["table"])
         elif action == "profile_table":
