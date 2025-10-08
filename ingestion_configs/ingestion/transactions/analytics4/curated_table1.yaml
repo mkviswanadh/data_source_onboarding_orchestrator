@@ -1,0 +1,13 @@
+ingestion:
+  source:
+    name: mysql_source
+    schema: ai_tdv_finacle
+    table: daily_transactions
+  target:
+    schema: analytics4
+    table: curated_table1
+  domain: transactions
+  description: ''
+  refresh_schedule: daily
+  load_strategy: incremental
+  created_at: '2025-10-08T11:09:21.960880'
