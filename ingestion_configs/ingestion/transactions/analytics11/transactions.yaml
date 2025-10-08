@@ -1,0 +1,13 @@
+ingestion:
+  source:
+    name: mysql_source
+    schema: ai_tdv_finacle
+    table: transactions
+  target:
+    schema: analytics11
+    table: transactions
+  domain: transactions
+  description: ''
+  refresh_schedule: daily
+  load_strategy: overwrite
+  created_at: '2025-10-08T17:38:19.076221'
