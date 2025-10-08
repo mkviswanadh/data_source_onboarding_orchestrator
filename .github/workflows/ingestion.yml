@@ -6,23 +6,40 @@ on:
 
 jobs:
   ingest_on_merge:
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Generate and deploy DAG
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
         run: |
-          python airflow_dag.py ingestion_configs/${{ github.event.pull_request.head.ref }}.yaml \
-            dag_outputs/${{ github.event.pull_request.head.ref }}.py /usr/local/airflow/dags
+          pip install pyyaml jinja2
+
+      - name: Generate DAG
+        run: |
+          python airflow_dag.py ingestion_configs/${{ github.head_ref }}.yaml \
+                 dag_outputs/${{ github.head_ref }}.py /usr/local/airflow/dags
+
+      - name: Extract DAG ID
+        id: extract_dag_id
+        run: |
+          DAG_ID=$(python -c "import yaml; d=yaml.safe_load(open('ingestion_configs/${{ github.head_ref }}.yaml')); print('ingest__' + d['ingestion']['source']['name'] + '__' + d['ingestion']['target']['table'])")
+          echo "dag_id=$DAG_ID" >> $GITHUB_OUTPUT
 
       - name: Trigger DAG via Airflow API
         run: |
-          dag_id="ingest__${{ github.event.pull_request.head.ref }}"
-          curl -X POST http://YOUR_AIRFLOW_HOST/api/v1/dags/$dag_id/dagRuns \
+          curl -X POST ${{ secrets.AIRFLOW_API_URL }}/api/v1/dags/${{ steps.extract_dag_id.outputs.dag_id }}/dagRuns \
             -H "Content-Type: application/json" \
             -d "{\"conf\": {}}"
 
       - name: Log audit
         run: |
-          python log_to_audit.py target_schema target_table success "Ingestion triggered after PR merge"
+          python log_to_audit.py mysql_source ai_tdv_finacle daily_transactions analytics3 curated_table1 success "Ingestion triggered after PR merge"
+

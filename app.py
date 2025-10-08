@@ -149,6 +149,18 @@ elif app_mode == "Explore Data":
 elif app_mode == "Data Analytics":
     st.subheader("Do you have any analytics queries?")
 
+    # Initialize chat history state if not already
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+    
+    if st.session_state.chat_history:
+        for msg in st.session_state.chat_history:
+            role = msg["role"]
+            if role == "user":
+                st.chat_message("user").write(msg["text"])
+            elif role == "assistant":
+                st.chat_message("assistant").write(msg["text"])
+
     user_input = st.chat_input("How can I help you today with data insights...")
 
     if user_input:
@@ -164,65 +176,84 @@ elif app_mode == "Data Analytics":
                 st.markdown(f"**Generated SQL:** `{sql_query}`")
                 auto_render_output(sql_query)
             else:
-                st.error("⚠️ LLM did not generate a valid SQL query.")
-                st.markdown("### Raw LLM Output:")
-                st.code(llm_response)
+                st.markdown("#### 🤖 Assistant Response:")
+                st.write(llm_response)
 
 # ----------------------------- #
 #      CONFIGURE INGESTION
 # ----------------------------- #
 elif app_mode == "Configure Ingestion":
-    st.subheader("Configure Your Ingestion Pipeline")
+    st.subheader("🤖 Configure Your Ingestion Pipeline (Conversational)")
+    
+    if "ingestion_context" not in st.session_state:
+        st.session_state.ingestion_context = {
+            "ingestion_prompt": "",
+            "missing_fields": [],
+            "parsed_params": {},
+            "confirmation_given": False
+        }
 
-    all_sources = conversation_manager.run_action("discover_sources_full")
-    unique_sources = sorted(set([src["source_name"] for src in all_sources]))
-    selected_source = st.selectbox("Select source:", unique_sources)
+    user_query = st.chat_input("Describe your ingestion configuration needs (e.g., Ingest transactions data from MySQL to Postgres daily)...")
 
-    if selected_source:
-        schemas = sorted(set([src["schema"] for src in all_sources if src["source_name"] == selected_source]))
-        selected_schema = st.selectbox("Select source schema:", schemas)
+    if user_query:
+        st.session_state.ingestion_context["ingestion_prompt"] = user_query
+        response = conversation_manager.llama.chat([
+            {"role": "system", "content": "You're a data ingestion assistant that extracts parameters for building a data pipeline."},
+            {"role": "user", "content": user_query}
+        ])
+        
+        parsed_params = conversation_manager.run_action("parse_ingestion_prompt", prompt=user_query)
+        st.session_state.ingestion_context["parsed_params"] = parsed_params
 
-        if selected_schema:
-            tables = sorted(
-                [src["table"] for src in all_sources if src["source_name"] == selected_source and src["schema"] == selected_schema]
-            )
-            selected_table = st.selectbox("Select source table:", tables)
+        required_fields = [
+            "source_name", "source_table",
+            "target_table", "domain",
+            "refresh", "load_strategy"
+        ]
 
-            st.markdown("---")
-            domain = st.text_input("Enter Domain for Ingestion", value="transactions")
-            target_schema = st.text_input(f"Enter Target Schema for {domain}", value="analytics")
-            target_table = st.text_input(f"Enter Target Table for {domain}", value="curated_table")
+        missing = [f for f in required_fields if f not in parsed_params or not parsed_params[f]]
+        st.session_state.ingestion_context["missing_fields"] = missing
 
-            refresh_schedule = st.selectbox("Select Refresh Schedule", ["one-time", "daily", "monthly", "quarterly"])
-            load_strategy = st.selectbox("Select Load Strategy", ["overwrite", "incremental"])
+    parsed = st.session_state.ingestion_context["parsed_params"]
+    missing_fields = st.session_state.ingestion_context["missing_fields"]
 
-            st.markdown("### Ingestion Configuration Summary")
-            st.write(f"- Source: `{selected_source}`")
-            st.write(f"- Source Schema: `{selected_schema}`")
-            st.write(f"- Source Table: `{selected_table}`")
-            st.write(f"- Domain: {domain}")
-            st.write(f"- Target Schema: {target_schema}")
-            st.write(f"- Target Table: {target_table}")
-            st.write(f"- Refresh Schedule: {refresh_schedule}")
-            st.write(f"- Load Strategy: {load_strategy}")
+    if parsed:
+        st.markdown("### 🧾 Parsed Ingestion Configuration")
+        for k, v in parsed.items():
+            st.write(f"**{k.replace('_', ' ').title()}**: `{v}`")
 
-            if st.button("Create Ingestion YAML and PR"):
+        if missing_fields:
+            st.warning(f"Missing fields: {', '.join(missing_fields)}. Please reply with missing details (e.g., source_table is 'daily_txn').")
+
+        else:
+            # Only ask for confirmation if not yet stored
+            if "user_confirmed" not in st.session_state:
+                st.markdown("### ❓ Do you want to proceed with this ingestion configuration?")
+                user_confirmation = st.radio("Please confirm:", options=["", "Yes", "No"], index=0, key="confirmation_choice")
+
+                if st.session_state.confirmation_choice == "Yes":
+                    st.session_state.user_confirmed = True
+                    st.success("✅ Confirmation received. Proceeding to create PR...")
+
+                elif st.session_state.confirmation_choice == "No":
+                    st.warning("❌ PR creation skipped.")
+                    st.stop()  # Immediately stop further code
+
+                else:
+                    st.info("Please select Yes or No to continue.")
+                    st.stop()  # Wait until user selects something
+
+            # If user confirmed earlier, proceed
+            if st.session_state.get("user_confirmed"):
                 with st.spinner("Generating ingestion YAML and creating GitHub PR..."):
                     ingestion_yaml = conversation_manager.run_action(
                         "build_ingest_yaml",
-                        source_name=selected_source,
-                        source_schema=selected_schema,
-                        source_table=selected_table,
-                        target_schema=target_schema,
-                        target_table=target_table,
-                        refresh=refresh_schedule,
-                        load_strategy=load_strategy,
-                        domain=domain,
+                        **parsed
                     )
 
-                    pr_title = f"Ingestion Pipeline for {domain} Data"
-                    pr_body = f"Automated PR for ingesting {domain} data into {target_schema}.{target_table}"
-                    pr_branch = f"ingestion/{domain}/{target_schema}/{target_table}"
+                    pr_title = f"Ingestion Pipeline for {parsed['domain']} Data"
+                    pr_body = f"Automated PR for ingesting {parsed['domain']} data into {parsed['target_schema']}.{parsed['target_table']}"
+                    pr_branch = f"ingestion/{parsed['domain']}/{parsed['target_schema']}/{parsed['target_table']}"
 
                     pr_response = conversation_manager.run_action(
                         "create_github_pr",

@@ -24,7 +24,7 @@ default_args = {
 with DAG(
     dag_id="{{ dag_id }}",
     default_args=default_args,
-    schedule_interval="{{ schedule }}",
+    schedule_interval={{ schedule }},
     catchup=False,
 ) as dag:
 
@@ -35,7 +35,8 @@ with DAG(
 
     log_audit = BashOperator(
         task_id="log_audit",
-        bash_command="python3 /opt/airflow/dags/log_to_audit.py {{ target_schema }} {{ target_table }} success 'Ingestion completed via DAG {{ dag_id }}'"
+        bash_command="python3 /opt/airflow/dags/log_to_audit.py {{ source_name }} {{ source_schema }} {{ source_table }} {{ target_schema }} {{ target_table }} success 'Ingestion completed via DAG {{ dag_id }}'"
     )
+
 
     run_ingest >> log_audit

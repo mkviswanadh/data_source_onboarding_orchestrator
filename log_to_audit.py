@@ -3,38 +3,67 @@ from datetime import datetime
 import sys
 import os
 
-def log_ingestion(target_schema: str, target_table: str,
-                  status: str, message: str = ""):
-    db_path = os.path.join(os.path.dirname(__file__), "audit.db")
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
+def log_ingestion(
+    source_name: str,
+    source_schema: str,
+    source_table: str,
+    target_schema: str,
+    target_table: str,
+    status: str,
+    message: str = ""
+):
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        db_path = os.path.join(script_dir, "audit.db")
 
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS ingestion_audit (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        target_schema TEXT,
-        target_table TEXT,
-        status TEXT,
-        message TEXT,
-        ts TIMESTAMP
-    )
-    """)
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
 
-    cursor.execute("""
-    INSERT INTO ingestion_audit(target_schema, target_table, status, message, ts)
-    VALUES (?, ?, ?, ?, ?)
-    """, (target_schema, target_table, status, message, datetime.utcnow()))
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS ingestion_audit (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_name TEXT,
+            source_schema TEXT,
+            source_table TEXT,
+            target_schema TEXT,
+            target_table TEXT,
+            status TEXT NOT NULL,
+            message TEXT,
+            ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
 
-    conn.commit()
-    conn.close()
+        cursor.execute("""
+        INSERT INTO ingestion_audit (
+            source_name, source_schema, source_table,
+            target_schema, target_table, status, message, ts
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            source_name, source_schema, source_table,
+            target_schema, target_table,
+            status, message, datetime.utcnow()
+        ))
 
-if __name__ == "__main__":
-    if len(sys.argv) < 4:
-        print("Usage: python log_to_audit.py <target_schema> <target_table> <status> [message]")
+        conn.commit()
+        conn.close()
+
+        print(f"✅ Audit logged: {source_name}.{source_schema}.{source_table} → {target_schema}.{target_table} [{status}]")
+
+    except Exception as e:
+        print(f"❌ Error logging ingestion audit: {e}")
         sys.exit(1)
 
-    schema = sys.argv[1]
-    table = sys.argv[2]
-    status = sys.argv[3]
-    message = sys.argv[4] if len(sys.argv) > 4 else ""
-    log_ingestion(schema, table, status, message)
+if __name__ == "__main__":
+    if len(sys.argv) < 7:
+        print("❌ Usage: python log_to_audit.py <source_name> <source_schema> <source_table> <target_schema> <target_table> <status> [message]")
+        sys.exit(1)
+
+    source_name = sys.argv[1]
+    source_schema = sys.argv[2]
+    source_table = sys.argv[3]
+    target_schema = sys.argv[4]
+    target_table = sys.argv[5]
+    status = sys.argv[6]
+    message = sys.argv[7] if len(sys.argv) > 7 else ""
+
+    log_ingestion(source_name, source_schema, source_table, target_schema, target_table, status, message)
